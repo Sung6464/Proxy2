@@ -36,7 +36,13 @@ def chat_client() -> OpenAI | AzureOpenAI:
 def embed_client() -> AzureOpenAI | OpenAI:
     global _embed_client
     if _embed_client is None:
-        if config.AZURE_OPENAI_API_KEY and config.AZURE_OPENAI_ENDPOINT:
+        if config.AZURE_OPENAI_EMBEDDING_API_KEY and config.AZURE_OPENAI_EMBEDDING_ENDPOINT:
+            _embed_client = AzureOpenAI(
+                api_key=config.AZURE_OPENAI_EMBEDDING_API_KEY,
+                azure_endpoint=config.AZURE_OPENAI_EMBEDDING_ENDPOINT,
+                api_version=config.AZURE_OPENAI_EMBEDDING_API_VERSION,
+            )
+        elif config.AZURE_OPENAI_API_KEY and config.AZURE_OPENAI_ENDPOINT:
             _embed_client = AzureOpenAI(
                 api_key=config.AZURE_OPENAI_API_KEY,
                 azure_endpoint=config.AZURE_OPENAI_ENDPOINT,

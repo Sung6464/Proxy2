@@ -74,7 +74,86 @@ def _heading_level(size: float, body: float) -> int:
     return 0
 
 
+def extract_pdf_with_document_intelligence(pdf_path: Path, doc_id: str) -> Path:
+    """Extract text/tables/structure with Azure Document Intelligence, crop figures with PyMuPDF."""
+    import base64
+    from azure.ai.documentintelligence import DocumentIntelligenceClient
+    from azure.core.credentials import AzureKeyCredential
+    from azure.ai.documentintelligence.models import AnalyzeDocumentRequest
+
+    out = _new_doc_dir(doc_id)
+    fig_dir = out / "figures"
+
+    # Initialize client
+    client = DocumentIntelligenceClient(
+        endpoint=config.DOCUMENT_INTELLIGENCE_ENDPOINT,
+        credential=AzureKeyCredential(config.DOCUMENT_INTELLIGENCE_KEY)
+    )
+
+    pdf_bytes = pdf_path.read_bytes()
+    try:
+        poller = client.begin_analyze_document(
+            model_id="prebuilt-layout",
+            body=AnalyzeDocumentRequest(bytes_source=pdf_bytes),
+            output_content_format="markdown"
+        )
+    except Exception:
+        # Fallback to base64 source if bytes_source has any issues
+        encoded_bytes = base64.b64encode(pdf_bytes).decode("utf-8")
+        poller = client.begin_analyze_document(
+            model_id="prebuilt-layout",
+            body=AnalyzeDocumentRequest(base64_source=encoded_bytes),
+            output_content_format="markdown"
+        )
+
+    result = poller.result()
+    md_content = result.content or ""
+
+    # Crop detected figures
+    if result.figures:
+        doc = fitz.open(pdf_path)
+        for fig in result.figures:
+            if fig.id and fig.bounding_regions:
+                region = fig.bounding_regions[0]
+                page_number = region.page_number  # 1-indexed
+                polygon = region.polygon  # 8 floats: [x0, y0, x1, y1, x2, y2, x3, y3]
+
+                if polygon and len(polygon) == 8 and 0 < page_number <= len(doc):
+                    page = doc[page_number - 1]
+                    x_coords = [polygon[i] for i in range(0, 8, 2)]
+                    y_coords = [polygon[i+1] for i in range(0, 8, 2)]
+
+                    min_x = min(x_coords) * 72.0
+                    min_y = min(y_coords) * 72.0
+                    max_x = max(x_coords) * 72.0
+                    max_y = max(y_coords) * 72.0
+
+                    rect = fitz.Rect(min_x, min_y, max_x, max_y)
+                    try:
+                        pix = page.get_pixmap(clip=rect, dpi=150)
+                        fname = f"img_{fig.id}.png"
+                        pix.save(str(fig_dir / fname))
+                    except Exception as e:
+                        print(f"Failed to crop figure {fig.id}: {e}")
+        doc.close()
+
+    # Rewrite Markdown image URLs from figures/X to figures/img_X.png
+    md_content = re.sub(r"\!\[(.*?)\]\(figures/([^)]+)\)", r"![\1](figures/img_\2.png)", md_content)
+
+    if not md_content.lstrip().startswith("#"):
+        md_content = f"# {doc_id}\n\n" + md_content
+
+    (out / f"{doc_id}.md").write_text(md_content, encoding="utf-8")
+    return out
+
+
 def extract_pdf(pdf_path: Path, doc_id: str) -> Path:
+    if config.has_document_intelligence():
+        try:
+            return extract_pdf_with_document_intelligence(pdf_path, doc_id)
+        except Exception as e:
+            print(f"Azure Document Intelligence failed: {e}. Falling back to local PyMuPDF extraction...")
+
     out = _new_doc_dir(doc_id)
     fig_dir = out / "figures"
     doc = fitz.open(pdf_path)

@@ -55,6 +55,11 @@ with st.sidebar:
     else:
         st.error("No OpenAI or Azure key. Add OPENAI_API_KEY to a .env file.", icon="⚠️")
 
+    if config.has_document_intelligence():
+        st.success("Azure Document Intelligence active", icon="✅")
+    else:
+        st.info("Local PDF extraction active. Set DOCUMENTINTELLIGENCE_ENDPOINT / KEY to enable cloud layout scanning.", icon="ℹ️")
+
     st.divider()
     st.subheader("Add documents")
     uploads = st.file_uploader(

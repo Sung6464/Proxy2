@@ -27,7 +27,24 @@ AZURE_OPENAI_API_VERSION = os.getenv("AZURE_OPENAI_API_VERSION") or os.getenv("A
 
 # We use the deploy names if provided, else the model name.
 AZURE_EMBED_DEPLOYMENT   = os.getenv("AZURE_EMBED_DEPLOYMENT") or os.getenv("AZURE_OPENAI_EMBEDDING_MODEL_EMBEDDING_MODEL") or ""
- 
+
+# Separate Azure OpenAI Embedding Configurations (if different from LLM resource)
+AZURE_OPENAI_EMBEDDING_API_KEY     = os.getenv("AZURE_OPENAI_EMBEDDING_MODEL_API_KEY") or ""
+AZURE_OPENAI_EMBEDDING_ENDPOINT    = os.getenv("AZURE_OPENAI_EMBEDDING_MODEL_API_BASE") or ""
+AZURE_OPENAI_EMBEDDING_API_VERSION = os.getenv("AZURE_OPENAI_EMBEDDING_MODEL_API_VERSION") or "2024-02-01"
+
+# Aliases for pp/embedding_model.py compatibility
+AZURE_OPENAI_EMBEDDING_API_BASE    = AZURE_OPENAI_EMBEDDING_ENDPOINT
+AZURE_OPENAI_EMBEDDING_MODEL       = AZURE_EMBED_DEPLOYMENT
+
+# Azure AI Document Intelligence
+DOCUMENT_INTELLIGENCE_ENDPOINT = os.getenv("DOCUMENTINTELLIGENCE_ENDPOINT") or os.getenv("AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT") or ""
+DOCUMENT_INTELLIGENCE_KEY      = os.getenv("DOCUMENTINTELLIGENCE_API_KEY") or os.getenv("AZURE_DOCUMENT_INTELLIGENCE_API_KEY") or ""
+
+
+def has_document_intelligence() -> bool:
+    return bool(DOCUMENT_INTELLIGENCE_ENDPOINT and DOCUMENT_INTELLIGENCE_KEY)
+
 # ---------------------------------------------------------------------------
 # Retrieval knobs (mirror the original Proxy-Pointer MultiModal pipeline)
 # ---------------------------------------------------------------------------
