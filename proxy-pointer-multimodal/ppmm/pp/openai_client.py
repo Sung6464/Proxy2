@@ -165,8 +165,9 @@ def generate_multimodal(
                 b64_bytes = p.read_bytes()
             except Exception:
                 continue
-        # Non-native formats: convert to PNG using Pillow before sending
-        elif ext in ("bmp", "tiff", "tif", "svg", "ico", "heic", "heif", "avif", "wmp"):
+        # Non-native formats: convert to PNG using Pillow before sending.
+        # This includes bmp, tiff, svg, ico, heic, heif, avif, wmp, emf, wmf, etc.
+        else:
             mime = "image/png"
             try:
                 from PIL import Image
@@ -178,17 +179,9 @@ def generate_multimodal(
                     img.save(buf, format="PNG")
                     b64_bytes = buf.getvalue()
             except Exception as e:
-                # Fallback to sending raw bytes if Pillow fails (e.g. unsupported library format like SVG/HEIC)
-                print(f"Warning: Failed to convert {p.name} ({ext}) using Pillow: {e}. Sending raw bytes instead.")
-                try:
-                    b64_bytes = p.read_bytes()
-                except Exception:
-                    continue
-        else:
-            mime = "image/png"
-            try:
-                b64_bytes = p.read_bytes()
-            except Exception:
+                # If Pillow fails to convert, we MUST skip it because sending raw
+                # non-native bytes to OpenAI will cause a 400 Bad Request error.
+                print(f"Warning: Skipping image {p.name} ({ext}) because Pillow failed to convert it to PNG: {e}")
                 continue
 
         try:
