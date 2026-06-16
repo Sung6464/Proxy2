@@ -26,6 +26,24 @@ import fitz  # PyMuPDF
 
 from . import config
 
+SUPPORTED_IMAGE_EXTS = (
+    "png",
+    "jpg",
+    "jpeg",
+    "gif",
+    "webp",
+    "svg",
+    "tiff",
+    "tif",
+    "bmp",
+    "ico",
+    "heic",
+    "heif",
+    "avif",
+    "wmp",
+)
+
+
 
 def _safe_doc_id(filename: str) -> str:
     stem = Path(filename).stem
@@ -202,7 +220,8 @@ def extract_pdf(pdf_path: Path, doc_id: str) -> Path:
                     rel = seen_xrefs[key]
                 else:
                     img_counter += 1
-                    fname = f"img_{img_counter}.{ 'png' if ext not in ('png','jpeg','jpg') else ext }"
+                    ext_to_use = ext.lower() if ext.lower() in SUPPORTED_IMAGE_EXTS else "png"
+                    fname = f"img_{img_counter}.{ext_to_use}"
                     (fig_dir / fname).write_bytes(img_bytes)
                     rel = f"figures/{fname}"
                     seen_xrefs[key] = rel
@@ -304,10 +323,10 @@ def extract_docx(docx_path: Path, doc_id: str) -> Path:
             return None
         blob = part.blob
         ext = (part.partname.ext or ".png").lstrip(".")
-        if ext.lower() not in ("png", "jpg", "jpeg", "gif", "bmp", "tiff", "webp"):
+        if ext.lower() not in SUPPORTED_IMAGE_EXTS:
             ext = "png"
         img_counter += 1
-        fname = f"img_{img_counter}.{ext}"
+        fname = f"img_{img_counter}.{ext.lower()}"
         (fig_dir / fname).write_bytes(blob)
         return f"figures/{fname}"
 
@@ -360,10 +379,78 @@ def extract_docx(docx_path: Path, doc_id: str) -> Path:
 
 
 # ---------------------------------------------------------------------------
+# PPTX
+# ---------------------------------------------------------------------------
+def extract_pptx(pptx_path: Path, doc_id: str) -> Path:
+    from pptx import Presentation
+    from pptx.enum.shapes import MSO_SHAPE_TYPE
+
+    out = _new_doc_dir(doc_id)
+    fig_dir = out / "figures"
+    prs = Presentation(str(pptx_path))
+
+    md_lines: list[str] = []
+    img_counter = 0
+
+    for i, slide in enumerate(prs.slides):
+        # Treat every slide as a H2 section
+        title = ""
+        if slide.shapes.title:
+            title = slide.shapes.title.text.strip()
+
+        if not title:
+            title = f"Slide {i + 1}"
+
+        md_lines.append(f"## {title}")
+        md_lines.append("")
+
+        # Extract text from shapes and save images
+        for shape in slide.shapes:
+            # Text
+            if hasattr(shape, "text") and shape.text.strip():
+                # Avoid repeats of the title we already added
+                if shape == slide.shapes.title:
+                    continue
+                md_lines.append(shape.text.strip())
+                md_lines.append("")
+
+            # Images
+            if shape.shape_type == MSO_SHAPE_TYPE.PICTURE:
+                img_counter += 1
+                image = shape.image
+                ext = image.ext  # e.g. 'png'
+                fname = f"img_{img_counter}.{ext}"
+                (fig_dir / fname).write_bytes(image.blob)
+                md_lines.append(f"![](figures/{fname})")
+                md_lines.append("")
+
+            # Tables
+            if shape.has_table:
+                table = shape.table
+                rows = []
+                for row in table.rows:
+                    rows.append([cell.text_frame.text.strip().replace("\n", " ") for cell in row.cells])
+
+                if rows:
+                    header = rows[0]
+                    md_lines.append("| " + " | ".join(header) + " |")
+                    md_lines.append("| " + " | ".join("---" for _ in header) + " |")
+                    for r in rows[1:]:
+                        md_lines.append("| " + " | ".join(r) + " |")
+                    md_lines.append("")
+
+    md = "\n".join(md_lines)
+    md = f"# {doc_id}\n\n" + md
+
+    (out / f"{doc_id}.md").write_text(md, encoding="utf-8")
+    return out
+
+
+# ---------------------------------------------------------------------------
 # Public entry point
 # ---------------------------------------------------------------------------
 def extract_file(path: str | Path, original_name: str | None = None) -> tuple[str, Path]:
-    """Extract a PDF/DOCX into extracted_papers/<doc_id>/. Returns (doc_id, dir)."""
+    """Extract a PDF/DOCX/PPTX into extracted_papers/<doc_id>/. Returns (doc_id, dir)."""
     path = Path(path)
     name = original_name or path.name
     doc_id = _safe_doc_id(name)
@@ -373,6 +460,8 @@ def extract_file(path: str | Path, original_name: str | None = None) -> tuple[st
         out = extract_pdf(path, doc_id)
     elif suffix in (".docx", ".doc"):
         out = extract_docx(path, doc_id)
+    elif suffix in (".pptx", ".ppt"):
+        out = extract_pptx(path, doc_id)
     else:
-        raise ValueError(f"Unsupported file type: {suffix} (only .pdf and .docx)")
+        raise ValueError(f"Unsupported file type: {suffix} (only .pdf, .docx, and .pptx)")
     return doc_id, out

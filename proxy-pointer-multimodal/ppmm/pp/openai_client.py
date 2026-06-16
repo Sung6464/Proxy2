@@ -139,25 +139,61 @@ def generate_multimodal(
 
         ext = p.suffix.lower().lstrip(".")
 
+        # Define native vs non-native formats.
+        # Native formats supported directly by OpenAI Vision API
         if ext in ("jpg", "jpeg"):
-
             mime = "image/jpeg"
-
+            try:
+                b64_bytes = p.read_bytes()
+            except Exception:
+                continue
         elif ext == "gif":
-
             mime = "image/gif"
-
+            try:
+                b64_bytes = p.read_bytes()
+            except Exception:
+                continue
         elif ext == "webp":
-
             mime = "image/webp"
-
-        else:
-
+            try:
+                b64_bytes = p.read_bytes()
+            except Exception:
+                continue
+        elif ext == "png":
             mime = "image/png"
+            try:
+                b64_bytes = p.read_bytes()
+            except Exception:
+                continue
+        # Non-native formats: convert to PNG using Pillow before sending
+        elif ext in ("bmp", "tiff", "tif", "svg", "ico", "heic", "heif", "avif", "wmp"):
+            mime = "image/png"
+            try:
+                from PIL import Image
+                import io
+                with Image.open(p) as img:
+                    if img.mode not in ("RGB", "RGBA"):
+                        img = img.convert("RGBA")
+                    buf = io.BytesIO()
+                    img.save(buf, format="PNG")
+                    b64_bytes = buf.getvalue()
+            except Exception as e:
+                # Fallback to sending raw bytes if Pillow fails (e.g. unsupported library format like SVG/HEIC)
+                print(f"Warning: Failed to convert {p.name} ({ext}) using Pillow: {e}. Sending raw bytes instead.")
+                try:
+                    b64_bytes = p.read_bytes()
+                except Exception:
+                    continue
+        else:
+            mime = "image/png"
+            try:
+                b64_bytes = p.read_bytes()
+            except Exception:
+                continue
 
         try:
 
-            b64 = base64.b64encode(p.read_bytes()).decode()
+            b64 = base64.b64encode(b64_bytes).decode()
 
             content.append({
 

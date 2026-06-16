@@ -8,3 +8,5 @@ pillow>=10.0
 openai>=1.0
 azure-ai-documentintelligence>=1.0.0
 langchain-openai
+python-pptx
+

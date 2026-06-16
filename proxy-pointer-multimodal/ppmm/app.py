@@ -63,10 +63,10 @@ with st.sidebar:
     st.divider()
     st.subheader("Add documents")
     uploads = st.file_uploader(
-        "Drop PDF or DOCX files here",
-        type=["pdf", "docx"],
+        "Drop PDF or DOCX or PPTX files here",
+        type=["pdf", "docx", "pptx"],
         accept_multiple_files=True,
-        help="Files are extracted locally (PyMuPDF / python-docx) — no external API needed for extraction.",
+        help="Files are extracted locally (PyMuPDF / python-docx / python-pptx) — no external API needed for extraction.",
     )
     if uploads and st.button("Process & index", type="primary", use_container_width=True):
         if not _has_key():
