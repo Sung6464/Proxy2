@@ -6,7 +6,8 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-load_dotenv()
+# Load .env file from the ppmm root directory relative to this config file
+load_dotenv(dotenv_path=Path(__file__).resolve().parent.parent / ".env")
 
 # ---------------------------------------------------------------------------
 # Models
