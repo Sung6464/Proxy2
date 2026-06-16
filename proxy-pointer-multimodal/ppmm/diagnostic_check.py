@@ -36,7 +36,9 @@ def run_diagnostic():
     if not (config.OPENAI_API_KEY or config.AZURE_OPENAI_API_KEY):
         print("\nERROR: No OpenAI or Azure OpenAI API key found in your .env file.")
         print("Please check your .env settings.")
-        return
+        sys.exit(1)
+
+    failures = []
 
     # 2. Test Embedding
     print("\n[2] Testing Embedding Connection...")
@@ -46,6 +48,7 @@ def run_diagnostic():
         print(f"  ✅ Embedding success! Vector length: {len(embeddings[0])}")
     except Exception as e:
         print(f"  ❌ Embedding failed: {e}")
+        failures.append(("Embedding API", e))
 
     # 3. Test LLM Chat
     print("\n[3] Testing Chat/LLM Connection...")
@@ -54,6 +57,7 @@ def run_diagnostic():
         print(f"  ✅ LLM success! Response: '{response}'")
     except Exception as e:
         print(f"  ❌ Chat failed: {e}")
+        failures.append(("LLM/Chat API", e))
 
     # 4. Test Document Intelligence if endpoint is provided
     if has_doc_intel:
@@ -66,14 +70,25 @@ def run_diagnostic():
                 endpoint=config.DOCUMENT_INTELLIGENCE_ENDPOINT,
                 credential=AzureKeyCredential(config.DOCUMENT_INTELLIGENCE_KEY)
             )
-            # Just verify endpoint / credentials can initialize and query details
-            print("  ✅ DocumentIntelligence client initialized.")
+            # Make a real network call to list batch results to verify connection and credentials
+            list(client.list_analyze_batch_results(model_id="prebuilt-layout"))
+            print("  ✅ Document Intelligence connection success!")
         except Exception as e:
-            print(f"  ❌ Document Intelligence initialization failed: {e}")
+            print(f"  ❌ Document Intelligence connection failed: {e}")
+            failures.append(("Document Intelligence API", e))
 
     print("\n==================================================")
-    print("                DIAGNOSTIC COMPLETE               ")
-    print("==================================================")
+    if failures:
+        print("          ❌ DIAGNOSTIC FAILED (WITH ERRORS)       ")
+        print("==================================================")
+        print("\nThe following API connections failed:")
+        for name, err in failures:
+            print(f"  * {name}: {err}")
+        print("\nPlease fix the above connection errors in your .env file.")
+        sys.exit(1)
+    else:
+        print("          ✅ ALL DIAGNOSTICS PASSED SUCCESS!       ")
+        print("==================================================")
 
 if __name__ == "__main__":
     run_diagnostic()
